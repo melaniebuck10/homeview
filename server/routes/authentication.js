@@ -4,28 +4,51 @@ const { Router } = require('express');
 
 const bcryptjs = require('bcryptjs');
 const User = require('./../models/user');
+const Landlord = require('./../models/landlord');
+const nodemailer = require('./../nodemailer');
+const fileUpload = require('./../middleware/file-upload');
 
 const router = new Router();
 
-router.post('/sign-up', (req, res, next) => {
-  const { name, email, password } = req.body;
-  bcryptjs
-    .hash(password, 10)
-    .then((hash) => {
-      return User.create({
-        name,
+router.post(
+  '/sign-up',
+  fileUpload.single('profilePicture'),
+  async (req, res, next) => {
+    const {
+      firstname,
+      lastname,
+      email,
+      password,
+      role,
+      description,
+      address,
+      phoneNumber
+    } = req.body;
+    let profilePicture;
+    if (req.file) {
+      profilePicture = req.file.path;
+    }
+    try {
+      const hash = await bcryptjs.hash(password, 10);
+      const user = await User.create({
+        firstname,
+        lastname,
         email,
-        passwordHashAndSalt: hash
+        passwordHashAndSalt: hash,
+        role,
+        description,
+        address,
+        phoneNumber,
+        profilePicture
       });
-    })
-    .then((user) => {
       req.session.userId = user._id;
       res.json({ user });
-    })
-    .catch((error) => {
+      await nodemailer.welcomeEmail(user.email);
+    } catch (error) {
       next(error);
-    });
-});
+    }
+  }
+);
 
 router.post('/sign-in', (req, res, next) => {
   let user;
@@ -55,6 +78,11 @@ router.post('/sign-in', (req, res, next) => {
 router.post('/sign-out', (req, res, next) => {
   req.session.destroy();
   res.json({});
+});
+
+router.get('/verify', (req, res) => {
+  const user = req.user || null;
+  res.json({ user: user });
 });
 
 module.exports = router;
